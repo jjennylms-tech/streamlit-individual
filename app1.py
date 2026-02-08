@@ -102,21 +102,35 @@ def retrieve_wikipedia(industry: str, k: int = 5):
 
 def build_llm(model_name: str, temperature: float):
     """
-    Create an LLM client. This example uses OpenAI via LangChain.
-    Replace this function if you want Gemini / DeepSeek.
+    Create an LLM client using OpenAI via LangChain.
+    Works both locally (env var) and on Streamlit Cloud (Secrets).
     """
     if not USE_OPENAI:
         raise RuntimeError(
             "langchain_openai not available. Install it or implement another provider."
         )
 
-    # Expect OPENAI_API_KEY in environment variables
-    if not os.getenv("OPENAI_API_KEY"):
+    # 1) Streamlit Cloud: Secrets
+    api_key = None
+    try:
+        api_key = st.secrets.get("OPENAI_API_KEY")
+    except Exception:
+        api_key = None
+
+    # 2) Local: environment variable
+    api_key = api_key or os.getenv("OPENAI_API_KEY")
+
+    if not api_key:
         raise RuntimeError(
-            "OPENAI_API_KEY not found. Set it in your environment before running."
+            "OPENAI_API_KEY not found. Add it to Streamlit Secrets (OPENAI_API_KEY) "
+            "or set it as an environment variable before running."
         )
 
-    return ChatOpenAI(model=model_name, temperature=temperature)
+    return ChatOpenAI(
+        model=model_name,
+        temperature=temperature,
+        api_key=api_key,
+    )
 
 
 def llm_summarise_pages(llm, pages: List[Dict], max_words_each: int = 110) -> List[str]:
@@ -203,8 +217,7 @@ with st.sidebar:
     model_name = st.selectbox(
         "LLM model (example: OpenAI)",
         options=[
-            "gpt-5-mini",     # if available in your account
-            "gpt-4o-mini",    # fallback for many accounts
+            "gpt-5-mini"     # if available in your account
         ],
         index=0
     )
@@ -238,14 +251,21 @@ colA, colB = st.columns([1, 1])
 with colA:
     run_retrieval = st.button("Find Wikipedia pages", type="primary")
 
-if run_retrieval:
-    with st.spinner("Searching Wikipedia…"):
-        try:
-            docs = retrieve_wikipedia(industry, k=5)
-            urls = extract_wikipedia_urls(docs)
+docs = retrieve_wikipedia(industry, k=5)
+urls = extract_wikipedia_urls(docs)
 
-            # Build a structured list of pages (title/url/text)
-            pages = []
+# Ensure we only keep the first 5 unique URLs
+urls = urls[:5]
+
+if len(urls) < 5:
+    st.warning(
+        f"Only found {len(urls)} Wikipedia URL(s). Try a broader industry term "
+        "or re-run retrieval."
+    )
+
+# Build a structured list of pages (title/url/text)
+pages = []
+
             for d in docs:
                 title = (d.metadata.get("title") if hasattr(d, "metadata") else None) or "Wikipedia page"
                 url = (d.metadata.get("source") if hasattr(d, "metadata") else None) or ""

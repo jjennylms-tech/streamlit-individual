@@ -251,63 +251,53 @@ colA, colB = st.columns([1, 1])
 with colA:
     run_retrieval = st.button("Find Wikipedia pages", type="primary")
 
-docs = retrieve_wikipedia(industry, k=5)
-urls = extract_wikipedia_urls(docs)
+# ---- Run retrieval ONLY when button is clicked ----
+if run_retrieval:
+    with st.spinner("Searching Wikipedia…"):
+        try:
+            docs = retrieve_wikipedia(industry, k=5)
 
-# Ensure we only keep the first 5 unique URLs
-urls = urls[:5]
+            # Extract and keep 5 unique URLs
+            urls = extract_wikipedia_urls(docs)
+            urls = urls[:5]
 
-if len(urls) < 5:
-    st.warning(
-        f"Only found {len(urls)} Wikipedia URL(s). Try a broader industry term "
-        "or re-run retrieval."
-    )
+            if len(urls) < 5:
+                st.warning(
+                    f"Only found {len(urls)} Wikipedia URL(s). "
+                    "Please try a broader or more standard industry term (e.g., 'retail banking' instead of a niche phrase)."
+                )
+                st.stop()
 
-# Build a structured list of pages (title/url/text)
-pages = []
+            # Build pages aligned with retrieved docs (truncate for cost control)
+            pages = []
+            for d in docs:
+                title = (d.metadata.get("title") if hasattr(d, "metadata") else None) or "Wikipedia page"
+                url = (d.metadata.get("source") if hasattr(d, "metadata") else None) or ""
+                text = getattr(d, "page_content", "") or ""
 
-for d in docs:
-    title = (d.metadata.get("title") if hasattr(d, "metadata") else None) or "Wikipedia page"
-    url = (d.metadata.get("source") if hasattr(d, "metadata") else None) or ""
-    text = getattr(d, "page_content", "") or ""
+                pages.append({
+                    "title": title,
+                    "url": url,
+                    "text": truncate_text_for_cost(text, wiki_chars_per_page)
+                })
 
-    pages.append({
-        "title": title,
-        "url": url,
-        "text": truncate_text_for_cost(text, wiki_chars_per_page)
-    })
+            # Keep only the pages whose URL is in our top-5 list
+            pages = [p for p in pages if p["url"] in urls]
 
-# Save for later steps
-st.session_state["wiki_urls"] = urls
-st.session_state["wiki_pages"] = pages
+            # Safety: ensure exactly 5 pages stored
+            pages = pages[:5]
 
-if generate:
-    try:
-        with st.spinner("Generating report…"):
-            llm = build_llm(model_name=model_name, temperature=temperature)
+            st.session_state["wiki_urls"] = urls
+            st.session_state["wiki_pages"] = pages
 
-            pages = st.session_state["wiki_pages"]
-            urls = st.session_state["wiki_urls"]
+        except Exception as e:
+            st.error(f"Retrieval failed: {e}")
+            st.stop()
 
-            summaries = llm_summarise_pages(
-                llm,
-                pages,
-                max_words_each=110
-            )
-
-            report = llm_write_report(
-                llm,
-                industry=industry,
-                page_summaries=summaries,
-                urls=urls
-            )
-
-            st.session_state["report"] = report
-            st.session_state["summaries"] = summaries
-
-    except Exception as e:
-        st.error(f"Report generation failed: {e}")
-
+# If user hasn't clicked retrieval yet, stop before moving on
+if "wiki_urls" not in st.session_state or not st.session_state["wiki_urls"]:
+    st.warning("Click **Find Wikipedia pages** to retrieve and display the 5 URLs.")
+    st.stop()
 
 # Display Q2 output (URLs)
 if "wiki_urls" in st.session_state and st.session_state["wiki_urls"]:

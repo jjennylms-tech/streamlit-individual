@@ -126,7 +126,7 @@ def retrieve_wikipedia(industry: str, k: int = 5):
     return docs
 
 
-def build_llm(model_name: str, temperature: float):
+def build_llm(model_name: str, temperature: float, api_key_override: str | None = None):
     """
     Create an LLM client using OpenAI via LangChain.
     Works both locally (env var) and on Streamlit Cloud (Secrets).
@@ -135,22 +135,27 @@ def build_llm(model_name: str, temperature: float):
         raise RuntimeError(
             "langchain_openai not available. Install it or implement another provider."
         )
+        
+    # 0) Highest priority: user-provided key in the sidebar (per-session, masked)
+    api_key = (api_key_override or "").strip() or None
 
     # 1) Streamlit Cloud: Secrets
-    api_key = None
-    try:
-        api_key = st.secrets.get("OPENAI_API_KEY")
-    except Exception:
-        api_key = None
+    if not api_key:
+        try:
+            api_key = st.secrets.get("OPENAI_API_KEY")
+        except Exception:
+            api_key = None
 
     # 2) Local: environment variable
     api_key = api_key or os.getenv("OPENAI_API_KEY")
 
     if not api_key:
         raise RuntimeError(
-            "OPENAI_API_KEY not found. Add it to Streamlit Secrets (OPENAI_API_KEY) "
+            "OPENAI_API_KEY not found. Please enter it in the sidebar, "
+            "or add it to Streamlit Secrets (OPENAI_API_KEY), "
             "or set it as an environment variable before running."
         )
+
 
     return ChatOpenAI(
         model=model_name,
@@ -231,6 +236,12 @@ st.caption("MSIN0231 ML4B Individual Assignment – Q1 to Q3")
 
 with st.sidebar:
     st.header("Settings (Cost & Quality)")
+    # --- NEW: API key input (masked) ---
+    api_key_input = st.text_input(
+        "Please enter your OpenAI API key",
+        type="password"
+    )
+
     st.write(
         "Tip: cheaper models + shorter context = lower cost.\n"
         "This app truncates Wikipedia text and summarises pages before writing the report."
@@ -348,7 +359,7 @@ with col2:
 if generate:
     with st.spinner("Generating report…"):
         try:
-            llm = build_llm(model_name=model_name, temperature=temperature)
+            llm = build_llm(model_name=model_name, temperature=temperature, api_key_override=api_key_input)
 
             pages = st.session_state["wiki_pages"]
             urls = st.session_state["wiki_urls"]

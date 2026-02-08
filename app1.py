@@ -281,9 +281,33 @@ for d in docs:
 st.session_state["wiki_urls"] = urls
 st.session_state["wiki_pages"] = pages
 
-except Exception as e:
-    st.error(f"Retrieval failed: {e}")
-    st.stop()
+if generate:
+    try:
+        with st.spinner("Generating report…"):
+            llm = build_llm(model_name=model_name, temperature=temperature)
+
+            pages = st.session_state["wiki_pages"]
+            urls = st.session_state["wiki_urls"]
+
+            summaries = llm_summarise_pages(
+                llm,
+                pages,
+                max_words_each=110
+            )
+
+            report = llm_write_report(
+                llm,
+                industry=industry,
+                page_summaries=summaries,
+                urls=urls
+            )
+
+            st.session_state["report"] = report
+            st.session_state["summaries"] = summaries
+
+    except Exception as e:
+        st.error(f"Report generation failed: {e}")
+
 
 # Display Q2 output (URLs)
 if "wiki_urls" in st.session_state and st.session_state["wiki_urls"]:

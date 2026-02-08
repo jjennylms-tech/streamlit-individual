@@ -96,7 +96,33 @@ def retrieve_wikipedia(industry: str, k: int = 5):
         )
 
     retriever = WikipediaRetriever(top_k_results=k, lang="en")
-    docs = retriever.get_relevant_documents(industry)
+@st.cache_data(show_spinner=False)
+def retrieve_wikipedia(industry: str, k: int = 5):
+    """
+    Retrieve top-k Wikipedia documents for the industry using WikipediaRetriever.
+    Works across LangChain versions:
+    - Newer: retriever.invoke(query)
+    - Older: retriever.get_relevant_documents(query)
+    """
+    if not USE_LANGCHAIN:
+        raise RuntimeError(
+            "LangChain WikipediaRetriever not available. "
+            "Install packages from requirements.txt."
+        )
+
+    retriever = WikipediaRetriever(top_k_results=k, lang="en")
+
+    # ✅ New LangChain API (most likely for you)
+    if hasattr(retriever, "invoke"):
+        docs = retriever.invoke(industry)
+    # ✅ Older API fallback
+    elif hasattr(retriever, "get_relevant_documents"):
+        docs = retriever.get_relevant_documents(industry)
+    else:
+        raise RuntimeError(
+            "WikipediaRetriever API changed: no supported retrieval method found."
+        )
+
     return docs
 
 

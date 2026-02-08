@@ -266,24 +266,24 @@ if len(urls) < 5:
 # Build a structured list of pages (title/url/text)
 pages = []
 
-            for d in docs:
-                title = (d.metadata.get("title") if hasattr(d, "metadata") else None) or "Wikipedia page"
-                url = (d.metadata.get("source") if hasattr(d, "metadata") else None) or ""
-                text = getattr(d, "page_content", "") or ""
+for d in docs:
+    title = (d.metadata.get("title") if hasattr(d, "metadata") else None) or "Wikipedia page"
+    url = (d.metadata.get("source") if hasattr(d, "metadata") else None) or ""
+    text = getattr(d, "page_content", "") or ""
 
-                pages.append({
-                    "title": title,
-                    "url": url,
-                    "text": truncate_text_for_cost(text, wiki_chars_per_page)
-                })
+    pages.append({
+        "title": title,
+        "url": url,
+        "text": truncate_text_for_cost(text, wiki_chars_per_page)
+    })
 
-            # Save for later steps
-            st.session_state["wiki_urls"] = urls
-            st.session_state["wiki_pages"] = pages
+# Save for later steps
+st.session_state["wiki_urls"] = urls
+st.session_state["wiki_pages"] = pages
 
-        except Exception as e:
-            st.error(f"Retrieval failed: {e}")
-            st.stop()
+except Exception as e:
+    st.error(f"Retrieval failed: {e}")
+    st.stop()
 
 # Display Q2 output (URLs)
 if "wiki_urls" in st.session_state and st.session_state["wiki_urls"]:

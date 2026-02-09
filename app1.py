@@ -230,12 +230,16 @@ Five URLs:
 # Streamlit UI
 # =============================================================================
 
-st.set_page_config(page_title="ML4B Market Research Assistant", layout="wide")
-st.title("📊 Market Research Assistant (Wikipedia-based)")
+st.set_page_config(
+    page_title="ML4B Market Research Assistant",
+    layout="wide",
+    initial_sidebar_state="expanded"  # NEW: open sidebar by default
+)
+st.title("📊 Market Research Assistant")
 st.caption("MSIN0231 ML4B Individual Assignment – Q1 to Q3")
 
 with st.sidebar:
-    st.header("Settings (Cost & Quality)")
+    st.header("User's API")
     # --- NEW: API key input (masked) ---
     api_key_input = st.text_input(
         "Please enter your OpenAI API key",
@@ -266,6 +270,17 @@ with st.sidebar:
         value=3500,
         step=200
     )
+
+# NEW: Gate the app until an API key is provided (sidebar / secrets / env var)
+api_key_available = bool((api_key_input or "").strip()) or bool(os.getenv("OPENAI_API_KEY"))
+try:
+    api_key_available = api_key_available or bool(st.secrets.get("OPENAI_API_KEY"))
+except Exception:
+    pass
+
+if not api_key_available:
+    st.warning("Please enter your OpenAI API key in the sidebar to start using the app.")
+    st.stop()
 
 st.divider()
 st.header("Step 1 (Q1): Provide an industry")

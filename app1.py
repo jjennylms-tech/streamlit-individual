@@ -12,6 +12,7 @@
 
 import os
 import re
+import json
 import textwrap
 from typing import List, Dict, Tuple
 
@@ -135,6 +136,53 @@ def build_llm(model_name: str, temperature: float, api_key_override: str | None 
         raise RuntimeError(
             "langchain_openai not available. Install it or implement another provider."
         )
+
+def llm_is_industry_check(llm, user_input: str) -> Dict:
+    """
+    Ask the LLM to decide if user_input is an industry/sector/market category.
+    Returns dict:
+      {
+        "is_industry": bool,
+        "reason": str,
+        "suggestions": [str, str, str]
+      }
+    """
+    prompt = f"""
+You are a strict classifier for a market research assistant.
+
+Decide whether the user input is an INDUSTRY / SECTOR / MARKET CATEGORY.
+- If it is a greeting, random word, person, place, or unclear: NOT an industry.
+- Accept common short valid sectors like "AI", "IT", "VR", "AR".
+- Accept industry phrases with numbers like "3D printing", "5G infrastructure", "Industry 4.0".
+
+Return ONLY valid JSON in this exact schema:
+{{
+  "is_industry": true/false,
+  "reason": "one short sentence",
+  "suggestions": ["example industry 1", "example industry 2", "example industry 3"]
+}}
+
+User input: "{user_input}"
+"""
+    resp = llm.invoke(prompt)
+    raw = (resp.content or "").strip()
+
+    # Robust parsing: try JSON first; if it fails, fall back safely.
+    try:
+        data = json.loads(raw)
+        return {
+            "is_industry": bool(data.get("is_industry", False)),
+            "reason": str(data.get("reason", "")).strip(),
+            "suggestions": list(data.get("suggestions", []))[:3] or ["retail banking", "cloud computing", "fast fashion"]
+        }
+    except Exception:
+        # Fallback if model returns slightly non-JSON text
+        return {
+            "is_industry": False,
+            "reason": "I couldn’t confidently identify this as an industry/sector input.",
+            "suggestions": ["retail banking", "cloud computing", "fast fashion"]
+        }
+
         
     # 0) Highest priority: user-provided key in the sidebar (per-session, masked)
     api_key = (api_key_override or "").strip() or None
@@ -308,6 +356,16 @@ if run_retrieval:
     with st.spinner("Searching Wikipedia…"):
         try:
             docs = retrieve_wikipedia(industry, k=5)
+            # NEW: LLM self-check (Option A) BEFORE retrieval
+            llm_check = build_llm(model_name=model_name, temperature=0.0, api_key_override=api_key_input)
+            verdict = llm_is_industry_check(llm_check, industry)
+
+            if not verdict["is_industry"]:
+                st.warning(f"Input rejected: {verdict['reason']}")
+                st.write("Try an industry term like:")
+                for s in verdict["suggestions"]:
+                    st.write(f"- {s}")
+                st.stop()
 
             # Extract and keep 5 unique URLs
             urls = extract_wikipedia_urls(docs)

@@ -356,7 +356,7 @@ if generate:
             st.stop()
 
 if "report" in st.session_state:
-    st.subheader("Q3 Output: Industry report (≤ 500 words)")
+    st.subheader("Output: Industry report")
     st.write(st.session_state["report"])
     wc = len(st.session_state["report"].split())
     st.caption(f"Word count: {wc} (must be < 500)")
